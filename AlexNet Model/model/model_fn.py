@@ -1,5 +1,6 @@
 """Define the model."""
-
+# model_fnAlexNetRemove5Regularizer0.01FC,ConvDropout05.py
+# remove conv5 and max5 regularizer 0.01 and regularizer for FC  with dropout 0.5 for train 
 import tensorflow as tf
 
 
@@ -25,7 +26,7 @@ def build_model(is_training, inputs, params):
     ##### modification - Add AlexNet ########
     # conv1
     # conv(11, 11, 96, 4, 4, padding='VALID', name='conv1')
-    out = tf.layers.conv2d(out, filters = 96, kernel_size = 11, strides = (4, 4), padding='valid')
+    out = tf.layers.conv2d(out, filters = 96, kernel_size = 11, strides = (4, 4), padding='valid', kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
     if params.use_batch_norm:
         out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
     out = tf.nn.relu(out)
@@ -40,7 +41,7 @@ def build_model(is_training, inputs, params):
 
     # conv2
     # conv(5, 5, 256, 1, 1, group=2, name='conv2')
-    out = tf.layers.conv2d(out, filters=256, kernel_size=5, strides=(1, 1), padding='same')
+    out = tf.layers.conv2d(out, filters=256, kernel_size=5, strides=(1, 1), padding='same', kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
     if params.use_batch_norm:
         out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
     out = tf.nn.relu(out)
@@ -56,39 +57,48 @@ def build_model(is_training, inputs, params):
     # conv3
     # conv(3, 3, 384, 1, 1, name='conv3')
     k = 3; c = 384; s_h = 1; s_w = 1
-    out = tf.layers.conv2d(out, filters=384, kernel_size=3, strides=(1, 1), padding='same')
+    out = tf.layers.conv2d(out, filters=384, kernel_size=3, strides=(1, 1), padding='same', kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
     if params.use_batch_norm:
         out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
     out = tf.nn.relu(out)
 
     # conv4
     # conv(3, 3, 384, 1, 1, name='conv4')
-    out = tf.layers.conv2d(out, filters=384, kernel_size=3, strides=(1, 1), padding='same')
+    out = tf.layers.conv2d(out, filters=384, kernel_size=3, strides=(1, 1), padding='same',kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
     if params.use_batch_norm:
         out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
     out = tf.nn.relu(out)
 
-    # conv5
-    # conv(3, 3, 256, 1, 1, name='conv5')
-    out = tf.layers.conv2d(out, filters=256, kernel_size=3, strides=(1, 1), padding='same')
-    if params.use_batch_norm:
-        out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
-    out = tf.nn.relu(out)
+#     # conv5
+#     # conv(3, 3, 256, 1, 1, name='conv5')
+#     out = tf.layers.conv2d(out, filters=256, kernel_size=3, strides=(1, 1), padding='same')
+#     if params.use_batch_norm:
+#         out = tf.layers.batch_normalization(out, momentum=bn_momentum, training=is_training)
+#     out = tf.nn.relu(out)
 
-    # maxpool5
-    # max_pool(3, 3, 2, 2, padding='VALID', name='pool5')
-    k_h = 3; s_h = 2
-    out = tf.layers.max_pooling2d(out, pool_size=3, strides = 2, padding='same')
+#     # maxpool5
+#     # max_pool(3, 3, 2, 2, padding='VALID', name='pool5')
+#     k_h = 3; s_h = 2
+#     out = tf.layers.max_pooling2d(out, pool_size=3, strides = 2, padding='same')
 
     # fully connected layers
     with tf.variable_scope('fc_1'):
         out = tf.contrib.layers.flatten(out)
-        out = tf.layers.dense(out, 4096)
+        out = tf.layers.dense(out, 4096, kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
         out = tf.nn.relu(out)
+        # add dropout
+        if is_training:
+            out = tf.nn.dropout(out, keep_prob = 0.5)#keep_prob =0.5
+        else:
+            out = tf.nn.dropout(out, keep_prob = 1.0)#keep_prob =1.0 for eval
     with tf.variable_scope('fc_2'):
-        out = tf.layers.dense(out, 4096)
+        out = tf.layers.dense(out, 4096, kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01))
         out = tf.nn.relu(out)
-
+        # add dropout
+        if is_training:
+            out = tf.nn.dropout(out, keep_prob = 0.5)#keep_prob =0.5
+        else:
+            out = tf.nn.dropout(out, keep_prob = 1.0)#keep_prob =1.0 for eval
     with tf.variable_scope('fc_3'):
         logits = tf.layers.dense(out, params.num_labels)
     return logits
@@ -120,7 +130,8 @@ def model_fn(mode, inputs, params, reuse=False):
         predictions = tf.argmax(logits, 1)
 
     # Define loss and accuracy
-    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+    # loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits) + tf.losses.get_regularization_loss()
+    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits) + tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
     accuracy = tf.reduce_mean(tf.cast(tf.equal(labels, predictions), tf.float32))
 
     # Define training step that minimizes the loss with the Adam optimizer
